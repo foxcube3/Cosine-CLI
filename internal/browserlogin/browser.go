@@ -1,7 +1,6 @@
 package browserlogin
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -42,13 +41,11 @@ func cookieHeaderForCosineChromeSafe() (header string, err error) {
 
 // cookieHeaderForCosineWithFilters is the internal logic to aggregate and format cookies.
 func cookieHeaderForCosineWithFilters(filters ...kooky.Filter) (string, error) {
-	seq := kooky.TraverseCookies(
-		context.Background(),
-		filters...,
-	).OnlyCookies()
+	// kooky v0.2.2 API exposes ReadCookies instead of TraverseCookies
+	read := kooky.ReadCookies(filters...)
 
 	var cookies []*kooky.Cookie
-	for c := range seq {
+	for _, c := range read {
 		if c != nil {
 			cookies = append(cookies, c)
 		}
@@ -56,12 +53,11 @@ func cookieHeaderForCosineWithFilters(filters ...kooky.Filter) (string, error) {
 
 	// Fallback for exact domain match if suffix yielded none
 	if len(cookies) == 0 {
-		seq2 := kooky.TraverseCookies(
-			context.Background(),
+		read2 := kooky.ReadCookies(
 			kooky.Valid,
 			kooky.DomainHasSuffix("cosine.sh"),
-		).OnlyCookies()
-		for c := range seq2 {
+		)
+		for _, c := range read2 {
 			if c != nil {
 				cookies = append(cookies, c)
 			}
