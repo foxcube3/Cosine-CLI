@@ -23,6 +23,7 @@ func usage() {
 	fmt.Println("  cosine login-cookie [header]     Save a raw Cookie header (arg or stdin)")
 	fmt.Println("  cosine whoami                    Show stored account info")
 	fmt.Println("  cosine search <query>            Interactive search using ripgrep + fzf")
+	fmt.Println("  cosine list-search <query>       Print matches without fzf")
 }
 
 func cmdDumpChromeCookies() int {
@@ -193,6 +194,28 @@ func cmdSearch(args []string) int {
 	return 0
 }
 
+func cmdListSearch(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "missing query")
+		return 1
+	}
+	query := args[0]
+	cwd, _ := os.Getwd()
+	results, err := search.SearchList(query, cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "list-search: %v\n", err)
+		return 1
+	}
+	if len(results) == 0 {
+		fmt.Fprintln(os.Stderr, "no matches")
+		return 1
+	}
+	for _, r := range results {
+		fmt.Printf("%s:%d: %s\n", r.File, r.Line, r.Text)
+	}
+	return 0
+}
+
 func trimChildError(stderr string, runErr error) string {
 	s := strings.TrimSpace(stderr)
 	if s == "" {
@@ -310,6 +333,8 @@ func main() {
 		os.Exit(cmdWhoAmI())
 	case "search":
 		os.Exit(cmdSearch(os.Args[2:]))
+	case "list-search":
+		os.Exit(cmdListSearch(os.Args[2:]))
 	case "help", "-h", "--help":
 		usage()
 	default:
