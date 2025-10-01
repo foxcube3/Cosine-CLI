@@ -1,12 +1,49 @@
+# github.com/Velocidex/json v0.0.0-20220224052537-92f3c0326e5a
+## explicit; go 1.14
+github.com/Velocidex/json
+# github.com/Velocidex/ordereddict v0.0.0-20230909174157-2aa49cc5d11d
+## explicit; go 1.13
+github.com/Velocidex/ordereddict
+# github.com/Velocidex/yaml/v2 v2.2.8
+## explicit; go 1.15
+github.com/Velocidex/yaml/v2
 # github.com/browserutils/kooky v0.2.2
 ## explicit; go 1.18
 github.com/browserutils/kooky
+github.com/browserutils/kooky/browser/all
+github.com/browserutils/kooky/browser/browsh
 github.com/browserutils/kooky/browser/chrome
+github.com/browserutils/kooky/browser/chromium
+github.com/browserutils/kooky/browser/dillo
+github.com/browserutils/kooky/browser/edge
+github.com/browserutils/kooky/browser/elinks
+github.com/browserutils/kooky/browser/epiphany
+github.com/browserutils/kooky/browser/firefox
+github.com/browserutils/kooky/browser/ie
+github.com/browserutils/kooky/browser/konqueror
+github.com/browserutils/kooky/browser/lynx
+github.com/browserutils/kooky/browser/netscape
+github.com/browserutils/kooky/browser/opera
+github.com/browserutils/kooky/browser/safari
+github.com/browserutils/kooky/browser/uzbl
+github.com/browserutils/kooky/browser/w3m
+github.com/browserutils/kooky/internal/bytesx
 github.com/browserutils/kooky/internal/chrome
 github.com/browserutils/kooky/internal/chrome/find
 github.com/browserutils/kooky/internal/cookies
+github.com/browserutils/kooky/internal/firefox
+github.com/browserutils/kooky/internal/firefox/find
+github.com/browserutils/kooky/internal/ie
+github.com/browserutils/kooky/internal/ie/find
+github.com/browserutils/kooky/internal/netscape
 github.com/browserutils/kooky/internal/timex
 github.com/browserutils/kooky/internal/utils
+# github.com/davecgh/go-spew v1.1.1
+## explicit
+github.com/davecgh/go-spew/spew
+# github.com/go-ini/ini v1.67.0
+## explicit
+github.com/go-ini/ini
 # github.com/go-sqlite/sqlite3 v0.0.0-20180313105335-53dd8e640ee7
 ## explicit
 github.com/go-sqlite/sqlite3
@@ -34,6 +71,10 @@ golang.org/x/sys/windows
 # golang.org/x/text v0.27.0
 ## explicit; go 1.23.0
 golang.org/x/text/cases
+golang.org/x/text/encoding
+golang.org/x/text/encoding/charmap
+golang.org/x/text/encoding/internal
+golang.org/x/text/encoding/internal/identifier
 golang.org/x/text/internal
 golang.org/x/text/internal/language
 golang.org/x/text/internal/language/compact
@@ -41,3 +82,6 @@ golang.org/x/text/internal/tag
 golang.org/x/text/language
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
+# www.velocidex.com/golang/go-ese v0.2.0
+## explicit; go 1.13
+www.velocidex.com/golang/go-ese/parser
