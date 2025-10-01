@@ -2,6 +2,14 @@ name: Vendor Go dependencies
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
 
 permissions:
   contents: write
