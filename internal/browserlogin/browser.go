@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zellyn/kooky"
-	"github.com/zellyn/kooky/browser/chrome"
+	"github.com/browserutils/kooky"
+	"github.com/browserutils/kooky/browser/chrome"
 )
 
 // CookieHeaderForCosine gathers non-expired cookies for cosine.sh from Chrome and formats
