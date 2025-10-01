@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"cosine-cli/internal/auth"
 	"cosine-cli/internal/browserlogin"
@@ -18,12 +20,42 @@ func usage() {
 	fmt.Println("  cosine search <query>     Interactive search using ripgrep + fzf")
 }
 
-func cmdLoginChrome() int {
+func cmdDumpChromeCookies() int {
 	header, err := browserlogin.CookieHeaderForCosine()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to read Chrome cookies: %v\n", err)
 		return 1
 	}
+	fmt.Print(header)
+	return 0
+}
+
+func cmdLoginChrome() int {
+	// Run cookie retrieval in a subprocess to isolate potential panics
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "resolve executable: %v\n", err)
+		return 1
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command(self, "dump-chrome-cookies")
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		// Surface child stderr to aid debugging
+		msg := stderr.String()
+		if msg == "" {
+			msg = err.Error()
+		}
+		fmt.Fprintf(os.Stderr, "failed to read Chrome cookies (subprocess): %s\n", msg)
+		return 1
+	}
+	header := stdout.String()
+	if header == "" {
+		fmt.Fprintf(os.Stderr, "no cookies returned from Chrome\n")
+		return 1
+	}
+
 	cfg := auth.Config{
 		CookieHeader: header,
 		Source:       "chrome",
@@ -81,6 +113,8 @@ func main() {
 	switch os.Args[1] {
 	case "login-chrome":
 		os.Exit(cmdLoginChrome())
+	case "dump-chrome-cookies":
+		os.Exit(cmdDumpChromeCookies())
 	case "whoami":
 		os.Exit(cmdWhoAmI())
 	case "search":
