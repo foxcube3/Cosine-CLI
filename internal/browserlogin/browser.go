@@ -9,7 +9,6 @@ import (
 
 	"github.com/browserutils/kooky"
 	_ "github.com/browserutils/kooky/browser/chrome"
-	_ "github.com/browserutils/kooky/browser/firefox"
 )
 
 // CookieHeaderForCosine gathers non-expired cookies for cosine.sh from Chrome and formats
@@ -24,12 +23,6 @@ func CookieHeaderForCosine() (string, error) {
 	return header, nil
 }
 
-// CookieHeaderForCosineFirefox gathers cookies from Firefox instead of Chrome.
-// Useful as a fallback when Chrome cookie decryption is unavailable on the system.
-func CookieHeaderForCosineFirefox() (string, error) {
-	return cookieHeaderForCosineWithFilters(kooky.DomainHasSuffix(".cosine.sh"), kooky.Valid, excludeCSRFFilter())
-}
-
 func excludeCSRFFilter() kooky.Filter {
 	return kooky.FilterFunc(func(c *kooky.Cookie) bool {
 		return c != nil && c.Name != "__Host-CSRF"
@@ -41,7 +34,7 @@ func excludeCSRFFilter() kooky.Filter {
 func cookieHeaderForCosineChromeSafe() (header string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("Chrome cookie decryption failed (library panic): %v. Try `cosine login-firefox` or export cookies manually.", r)
+			err = fmt.Errorf("Chrome cookie decryption failed (library panic): %v. Consider exporting cookies manually or using another browser.", r)
 		}
 	}()
 	return cookieHeaderForCosineWithFilters(kooky.DomainHasSuffix(".cosine.sh"), kooky.Valid, excludeCSRFFilter())
@@ -76,7 +69,7 @@ func cookieHeaderForCosineWithFilters(filters ...kooky.Filter) (string, error) {
 	}
 
 	if len(cookies) == 0 {
-		return "", fmt.Errorf("no cosine.sh cookies found; ensure you're logged in to cosine.sh in the selected browser")
+		return "", fmt.Errorf("no cosine.sh cookies found; ensure you're logged in to cosine.sh in Chrome")
 	}
 
 	// Deduplicate by cookie name (keep latest expires)
