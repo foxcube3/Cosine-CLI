@@ -2,7 +2,7 @@ module cosine-cli
 
 go 1.24.7
 
-require github.com/browserutils/kooky v0.2.4
+require github.com/browserutils/kooky v0.2.6
 
 require (
 	github.com/go-sqlite/sqlite3 v0.0.0-20180313105335-53dd8e640ee7 // indirect
