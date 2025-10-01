@@ -11,8 +11,10 @@ import (
 )
 
 type Config struct {
-	Email string `json:"email"`
-	Token string `json:"token"`
+	Email        string `json:"email"`
+	Token        string `json:"token"`          // legacy/manual token input
+	CookieHeader string `json:"cookie_header"`  // aggregated cookies from Chrome for cosine.sh
+	Source       string `json:"source"`         // "manual" | "chrome"
 }
 
 func configDir() (string, error) {
