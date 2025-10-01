@@ -1,9 +1,7 @@
 Cosine CLI
 
 A minimal CLI that:
-- Logs in to cosine.sh either by:
-  - Storing a user-provided token locally, or
-  - Importing your authenticated Chrome session cookies
+- Logs in to cosine.sh by importing your authenticated Chrome session cookies
 - Uses ripgrep (rg) and fzf to provide a fast interactive search across your working directory.
 
 Requirements
@@ -26,10 +24,7 @@ Build
   go build ./cmd/cosine
 
 Usage
-  # First-time login: store a token and optional email
-  ./cosine login
-
-  # Or import cookies from your authenticated Chrome session for cosine.sh
+  # Import cookies from your authenticated Chrome session for cosine.sh
   ./cosine login-chrome
 
   # Show stored account information
@@ -39,9 +34,7 @@ Usage
   ./cosine search <query>
 
 Notes
-- Authentication: cosine.sh does not provide a public programmatic login API. The CLI supports:
-  - Manual token entry (stored locally), or
-  - Importing your existing authenticated Chrome session cookies for cosine.sh (using github.com/zellyn/kooky).
+- Authentication: cosine.sh does not provide a public programmatic login API. This CLI imports your existing authenticated Chrome session cookies for cosine.sh (using github.com/zellyn/kooky).
 - Chrome session import: You must already be logged in to cosine.sh in Chrome on this machine. On macOS/Windows/Linux, cookies are decrypted using system facilities supported by kooky. If no cookies are found, log in via Chrome first and retry.
 - Dependencies: This CLI executes the external binaries rg (ripgrep) and fzf supplied by their respective repositories:
   - https://github.com/BurntSushi/ripgrep

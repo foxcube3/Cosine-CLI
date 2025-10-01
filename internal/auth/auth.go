@@ -1,20 +1,15 @@
 package auth
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type Config struct {
-	Email        string `json:"email"`
-	Token        string `json:"token"`          // legacy/manual token input
-	CookieHeader string `json:"cookie_header"`  // aggregated cookies from Chrome for cosine.sh
-	Source       string `json:"source"`         // "manual" | "chrome"
+	CookieHeader string `json:"cookie_header"` // aggregated cookies from Chrome for cosine.sh
+	Source       string `json:"source"`        // "chrome"
 }
 
 func configDir() (string, error) {
@@ -84,20 +79,4 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	return cfg, nil
-}
-
-func PromptLogin(stdin *os.File, stdout *os.File) (Config, error) {
-	in := bufio.NewReader(stdin)
-	fmt.Fprint(stdout, "Email (optional): ")
-	email, _ := in.ReadString('\n')
-	email = strings.TrimSpace(email)
-
-	fmt.Fprint(stdout, "Token (paste from cosine.sh, input hidden not supported): ")
-	token, _ := in.ReadString('\n')
-	token = strings.TrimSpace(token)
-
-	if token == "" {
-		return Config{}, errors.New("empty token")
-	}
-	return Config{Email: email, Token: token}, nil
 }

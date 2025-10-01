@@ -13,26 +13,9 @@ func usage() {
 	fmt.Println("Cosine CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  cosine login              Store a token for cosine.sh (manual)")
 	fmt.Println("  cosine login-chrome       Import cookies from Chrome for cosine.sh")
 	fmt.Println("  cosine whoami             Show stored account info")
 	fmt.Println("  cosine search <query>     Interactive search using ripgrep + fzf")
-}
-
-func cmdLogin() int {
-	cfg, err := auth.PromptLogin(os.Stdin, os.Stdout)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "login aborted: %v\n", err)
-		return 1
-	}
-	cfg.Source = "manual"
-	if err := auth.Save(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to save credentials: %v\n", err)
-		return 1
-	}
-	dir, _ := auth.EnsureDir()
-	fmt.Printf("Saved credentials to %s\n", dir)
-	return 0
 }
 
 func cmdLoginChrome() int {
@@ -60,12 +43,6 @@ func cmdWhoAmI() int {
 		return 1
 	}
 	fmt.Println("cosine.sh")
-	if cfg.Email != "" {
-		fmt.Printf("  Email: %s\n", cfg.Email)
-	}
-	if cfg.Token != "" {
-		fmt.Printf("  Token: %s... (%d chars)\n", cfg.Token[:min(4, len(cfg.Token))], len(cfg.Token))
-	}
 	if cfg.CookieHeader != "" {
 		fmt.Printf("  Cookies: %d bytes from %s\n", len(cfg.CookieHeader), cfg.Source)
 	}
@@ -102,8 +79,6 @@ func main() {
 		os.Exit(1)
 	}
 	switch os.Args[1] {
-	case "login":
-		os.Exit(cmdLogin())
 	case "login-chrome":
 		os.Exit(cmdLoginChrome())
 	case "whoami":
@@ -117,11 +92,4 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
