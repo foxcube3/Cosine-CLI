@@ -2,129 +2,108 @@ package chrome
 
 import (
 	"bytes"
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha1"
 	"errors"
 	"fmt"
 	"runtime"
-	"strconv"
 	"sync"
 
 	"golang.org/x/crypto/pbkdf2"
 
 	"github.com/browserutils/kooky"
-	"github.com/browserutils/kooky/internal/iterx"
 	"github.com/browserutils/kooky/internal/timex"
 	"github.com/browserutils/kooky/internal/utils"
 )
 
 // Thanks to https://gist.github.com/dacort/bd6a5116224c594b14db
 
-func (s *CookieStore) TraverseCookies(filters ...kooky.Filter) kooky.CookieSeq {
+func (s *CookieStore) ReadCookies(filters ...kooky.Filter) ([]*kooky.Cookie, error) {
 	if s == nil {
-		return iterx.ErrCookieSeq(errors.New(`cookie store is nil`))
+		return nil, errors.New(`cookie store is nil`)
 	}
 	if err := s.Open(); err != nil {
-		return iterx.ErrCookieSeq(err)
+		return nil, err
 	} else if s.Database == nil {
-		return iterx.ErrCookieSeq(errors.New(`database is nil`))
+		return nil, errors.New(`database is nil`)
 	}
 
-	// Get chrome DB version for https://chromium-review.googlesource.com/c/chromium/src/+/5792044
-	err := utils.VisitTableRows(s.Database, "meta", map[string]string{}, func(_ *int64, row utils.TableRow) error {
-		if id, err := row.String("key"); err != nil {
-			return err
-		} else if id != "version" {
-			return nil
-		}
-		if verString, err := row.String("value"); err != nil {
-			return err
-		} else if s.dbVersion, err = strconv.ParseInt(verString, 10, 64); err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return iterx.ErrCookieSeq(err)
-	}
-	if s.dbVersion == 0 {
-		return iterx.ErrCookieSeq(errors.New(`unable to get database version`))
-	}
+	var cookies []*kooky.Cookie
 
 	headerMappings := map[string]string{
 		"secure":   "is_secure",
 		"httponly": "is_httponly",
 	}
 
-	splitFilters := true
-	valRetr := func(row utils.TableRow) func(c *kooky.Cookie) error {
-		return func(c *kooky.Cookie) error { return s.saveCookieValue(c, row) }
-	}
-	yldr := iterx.NewCookieFilterYielder(splitFilters, filters...)
-
-	ctx := context.Background()
-	visitor := func(ctx context.Context, yield func(*kooky.Cookie, error) bool) func(rowID *int64, row utils.TableRow) error {
-		return func(rowID *int64, row utils.TableRow) error {
-			cookie := &kooky.Cookie{
-				Creation: timex.FromFILETIME(*rowID * 10),
-			}
-
-			var err error
-
-			cookie.Domain, err = row.String(`host_key`)
-			if err != nil {
-				return err
-			}
-
-			cookie.Name, err = row.String(`name`)
-			if err != nil {
-				return err
-			}
-
-			cookie.Path, err = row.String(`path`)
-			if err != nil {
-				return err
-			}
-
-			if expiresUTC, err := row.Int64(`expires_utc`); err == nil {
-				// https://cs.chromium.org/chromium/src/base/time/time.h?l=452&rcl=fceb9a030c182e939a436a540e6dacc70f161cb1
-				if expiresUTC != 0 {
-					cookie.Expires = timex.FromFILETIME(expiresUTC * 10)
-				}
-			} else {
-				return err
-			}
-
-			cookie.Secure, err = row.Bool(`is_secure`)
-			if err != nil {
-				return err
-			}
-
-			cookie.HttpOnly, err = row.Bool(`is_httponly`)
-			if err != nil {
-				return err
-			}
-			cookie.Browser = s
-
-			if !yldr(ctx, yield, cookie, nil, valRetr(row)) {
-				return iterx.ErrYieldEnd
-			}
-
-			return nil
+	var valueFilters, nonValueFilters []kooky.Filter
+	for _, filter := range filters {
+		if _, ok := filter.(kooky.ValueFilterFunc); ok {
+			valueFilters = append(valueFilters, filter)
+		} else {
+			nonValueFilters = append(nonValueFilters, filter)
 		}
 	}
 
-	seq := func(yield func(*kooky.Cookie, error) bool) {
-		err := utils.VisitTableRows(s.Database, `cookies`, headerMappings, visitor(ctx, yield))
-		if !errors.Is(err, iterx.ErrYieldEnd) {
-			yield(nil, err)
+	visitor := func(rowID *int64, row utils.TableRow) error {
+		cookie := &kooky.Cookie{
+			Creation: timex.FromFILETIME(*rowID * 10),
 		}
+
+		var err error
+
+		cookie.Domain, err = row.String(`host_key`)
+		if err != nil {
+			return err
+		}
+
+		cookie.Name, err = row.String(`name`)
+		if err != nil {
+			return err
+		}
+
+		cookie.Path, err = row.String(`path`)
+		if err != nil {
+			return err
+		}
+
+		if expiresUTC, err := row.Int64(`expires_utc`); err == nil {
+			// https://cs.chromium.org/chromium/src/base/time/time.h?l=452&rcl=fceb9a030c182e939a436a540e6dacc70f161cb1
+			if expiresUTC != 0 {
+				cookie.Expires = timex.FromFILETIME(expiresUTC * 10)
+			}
+		} else {
+			return err
+		}
+
+		cookie.Secure, err = row.Bool(`is_secure`)
+		if err != nil {
+			return err
+		}
+
+		cookie.HttpOnly, err = row.Bool(`is_httponly`)
+		if err != nil {
+			return err
+		}
+
+		if !kooky.FilterCookie(cookie, nonValueFilters...) {
+			return nil // cookie filtered out
+		}
+		if err := s.saveCookieValue(cookie, row); err != nil {
+			return err
+		}
+		if !kooky.FilterCookie(cookie, valueFilters...) {
+			return nil // cookie filtered out
+		}
+		cookies = append(cookies, cookie)
+
+		return nil
+	}
+	if err := utils.VisitTableRows(s.Database, `cookies`, headerMappings, visitor); err != nil {
+		return nil, err
 	}
 
-	return seq
+	return cookies, nil
 }
 
 // query, decrypt and store cookie value
@@ -198,7 +177,7 @@ func (s *CookieStore) decrypt(encrypted []byte) ([]byte, error) {
 
 	// try to reuse previously successful decryption method
 	if s.DecryptionMethod != nil {
-		decrypted, err := s.DecryptionMethod(encrypted, s.PasswordBytes, s.dbVersion)
+		decrypted, err := s.DecryptionMethod(encrypted, s.PasswordBytes)
 		if err == nil {
 			return decrypted, nil
 		} else {
@@ -206,7 +185,7 @@ func (s *CookieStore) decrypt(encrypted []byte) ([]byte, error) {
 		}
 	}
 
-	var decrypt func(encrypted, password []byte, dbVersion int64) ([]byte, error)
+	var decrypt func(encrypted, password []byte) ([]byte, error)
 
 	// prioritize previously selected platform then current platform and then other platforms in order of usage on non-server computers
 	// TODO: mobile
@@ -232,7 +211,7 @@ func (s *CookieStore) decrypt(encrypted []byte) ([]byte, error) {
 			switch {
 			case bytes.HasPrefix(encrypted, prefixDPAPI[:]):
 				// present before Chrome v80 on Windows
-				decrypt = func(encrypted, _ []byte, dbVersion int64) ([]byte, error) {
+				decrypt = func(encrypted, _ []byte) ([]byte, error) {
 					return decryptDPAPI(encrypted)
 				}
 			case bytes.HasPrefix(encrypted, []byte(`v10`)):
@@ -244,8 +223,8 @@ func (s *CookieStore) decrypt(encrypted []byte) ([]byte, error) {
 		case `darwin`:
 			needsKeyringQuerying = true
 			fallbackPassword = fallbackPasswordMacOS[:]
-			decrypt = func(encrypted, password []byte, dbVersion int64) ([]byte, error) {
-				return decryptAESCBC(encrypted, password, aescbcIterationsMacOS, dbVersion)
+			decrypt = func(encrypted, password []byte) ([]byte, error) {
+				return decryptAESCBC(encrypted, password, aescbcIterationsMacOS)
 			}
 		case `linux`:
 			switch {
@@ -257,8 +236,8 @@ func (s *CookieStore) decrypt(encrypted []byte) ([]byte, error) {
 			default:
 				password = fallbackPasswordLinux[:]
 			}
-			decrypt = func(encrypted, password []byte, dbVersion int64) ([]byte, error) {
-				return decryptAESCBC(encrypted, password, aescbcIterationsLinux, dbVersion)
+			decrypt = func(encrypted, password []byte) ([]byte, error) {
+				return decryptAESCBC(encrypted, password, aescbcIterationsLinux)
 			}
 		}
 		if decrypt == nil {
@@ -283,7 +262,7 @@ func (s *CookieStore) decrypt(encrypted []byte) ([]byte, error) {
 			tryNr++
 		}
 
-		decrypted, err := decrypt(encrypted, password, s.dbVersion)
+		decrypted, err := decrypt(encrypted, password)
 		if err == nil {
 			s.DecryptionMethod = decrypt
 			s.OSStr = opsys
@@ -308,7 +287,7 @@ const (
 	aescbcLength          = 16
 )
 
-func decryptAESCBC(encrypted, password []byte, iterations int, dbVersion int64) ([]byte, error) {
+func decryptAESCBC(encrypted, password []byte, iterations int) ([]byte, error) {
 	if len(encrypted) == 0 {
 		return nil, errors.New("empty encrypted value")
 	}
@@ -340,16 +319,10 @@ func decryptAESCBC(encrypted, password []byte, iterations int, dbVersion int64) 
 		return nil, fmt.Errorf("invalid last block padding length: %d", paddingLen)
 	}
 
-	// https://chromium-review.googlesource.com/c/chromium/src/+/5792044
-	prefixPaddingLen := 0
-	if dbVersion >= 24 {
-		prefixPaddingLen = 32
-	}
-
-	return decrypted[prefixPaddingLen : len(decrypted)-paddingLen], nil
+	return decrypted[:len(decrypted)-paddingLen], nil
 }
 
-func decryptAES256GCM(encrypted, password []byte, dbVersion int64) ([]byte, error) {
+func decryptAES256GCM(encrypted, password []byte) ([]byte, error) {
 	// https://stackoverflow.com/a/60423699
 
 	if len(encrypted) < 3+12+16 {
@@ -381,10 +354,5 @@ func decryptAES256GCM(encrypted, password []byte, dbVersion int64) ([]byte, erro
 		return nil, err
 	}
 
-	// https://chromium-review.googlesource.com/c/chromium/src/+/5792044
-	prefixPaddingLen := 0
-	if dbVersion >= 24 {
-		prefixPaddingLen = 32
-	}
-	return plaintext[prefixPaddingLen:], nil
+	return plaintext, nil
 }

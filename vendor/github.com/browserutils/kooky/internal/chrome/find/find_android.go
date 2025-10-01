@@ -7,11 +7,14 @@ import "errors"
 
 var errNotImplemented = errors.New(`not implemented`)
 
-func chromeRoots(yield func(string, error) bool) {
+func chromeRoots() ([]string, error) {
 	// https://chromium.googlesource.com/chromium/src.git/+/62.0.3202.58/docs/user_data_dir.md#android
-	if !yield(`/data/user/0/com.android.chrome/app_chrome`, nil) { // TODO check
-		return
+	var ret = []string{
+		`/data/user/0/com.android.chrome/app_chrome`, // TODO check
 	}
+	return ret, nil
 }
 
-func chromiumRoots(yield func(string, error) bool) { _ = yield(``, errNotImplemented) }
+func chromiumRoots() ([]string, error) {
+	return nil, errNotImplemented
+}

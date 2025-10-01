@@ -1,9 +1,6 @@
 package kooky
 
 import (
-	"context"
-	"fmt"
-	"iter"
 	"net/http"
 	"sync"
 )
@@ -13,22 +10,18 @@ import (
 // Call CookieStore.Close() after using any of its methods.
 type CookieStore interface {
 	http.CookieJar
-	BrowserInfo
-	SubJar(context.Context, ...Filter) (http.CookieJar, error)
-	TraverseCookies(...Filter) CookieSeq
-	Close() error
-}
-
-type BrowserInfo interface {
+	SubJar(filters ...Filter) (http.CookieJar, error)
+	ReadCookies(...Filter) ([]*Cookie, error)
 	Browser() string
 	Profile() string
 	IsDefaultProfile() bool
 	FilePath() string
+	Close() error
 }
 
 // CookieStoreFinder tries to find cookie stores at default locations.
 type CookieStoreFinder interface {
-	FindCookieStores() CookieStoreSeq
+	FindCookieStores() ([]CookieStore, error)
 }
 
 var (
@@ -59,181 +52,105 @@ func RegisterFinder(browser string, finder CookieStoreFinder) {
 // Or only a specific browser:
 //
 //	import _ "github.com/browserutils/kooky/browser/chrome"
-func FindAllCookieStores(ctx context.Context) []CookieStore {
-	return TraverseCookieStores(ctx).AllCookieStores(ctx)
-}
-
-type CookieStoreSeq iter.Seq2[CookieStore, error]
-
-// sequence of non-nil cookie stores and nil errors
-func (s CookieStoreSeq) OnlyCookieStores() CookieStoreSeq {
-	return func(yield func(CookieStore, error) bool) {
-		if s == nil {
-			return
-		}
-		for cookieStore, err := range s {
-			if err != nil || cookieStore == nil {
-				continue
-			}
-			if !yield(cookieStore, nil) {
-				return
-			}
-		}
-	}
-}
-
-func (s CookieStoreSeq) AllCookieStores(ctx context.Context) []CookieStore {
+func FindAllCookieStores() []CookieStore {
 	var ret []CookieStore
-	if s == nil {
-		return nil
-	}
-Outer:
-	for cookieStore := range s {
-		select {
-		case <-ctx.Done():
-			break Outer
-		default:
+
+	var wg sync.WaitGroup
+	wg.Add(len(finders))
+
+	c := make(chan []CookieStore)
+	done := make(chan struct{})
+
+	go func() {
+		for cookieStores := range c {
+			ret = append(ret, cookieStores...)
 		}
-		if cookieStore == nil {
-			continue
-		}
-		ret = append(ret, cookieStore)
+		close(done)
+	}()
+
+	muFinder.RLock()
+	defer muFinder.RUnlock()
+	for _, finder := range finders {
+		go func(finder CookieStoreFinder) {
+			defer wg.Done()
+			cookieStores, err := finder.FindCookieStores()
+			if err == nil && cookieStores != nil {
+				c <- cookieStores
+			}
+		}(finder)
 	}
+
+	wg.Wait()
+	close(c)
+
+	<-done
+
 	return ret
 }
 
-func (s CookieStoreSeq) TraverseCookies(ctx context.Context, filters ...Filter) CookieSeq {
-	if s == nil {
-		return func(yield func(*Cookie, error) bool) {}
-	}
+// ReadCookies() uses registered cookiestore finders to read cookies.
+// Erronous reads are skipped.
+//
+// Register cookie store finders for all browsers like this:
+//
+//	import _ "github.com/browserutils/kooky/browser/all"
+//
+// Or only a specific browser:
+//
+//	import _ "github.com/browserutils/kooky/browser/chrome"
+func ReadCookies(filters ...Filter) []*Cookie {
+	var ret []*Cookie
 
-	ctx, cancel := context.WithCancel(ctx)
-	type ce struct {
-		c *Cookie
-		e error
-	}
-	startChan := make(chan struct{}, 1)
-	cookieChan := make(chan ce, 1)
+	cs := make(chan []CookieStore)
+	c := make(chan []*Cookie)
+	done := make(chan struct{})
 
+	// append cookies
 	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-startChan: // wait for iteration start
+		for cookies := range c {
+			ret = append(ret, cookies...)
 		}
-		var wg sync.WaitGroup
-		defer func() {
-			wg.Wait()
-			cancel()
-			close(cookieChan)
-		}()
-		for cookieStore, err := range s {
-			if err != nil {
-				select {
-				case <-ctx.Done():
-					return
-				case cookieChan <- ce{e: fmt.Errorf(`cookie store: %w`, err)}:
-				}
-				continue
-			}
-			if cookieStore == nil {
-				continue
-			}
-			wg.Add(1)
-			go func(cookieStore CookieStore) {
-				defer wg.Done()
-				for cookie, err := range cookieStore.TraverseCookies(filters...) {
-					select {
-					case <-ctx.Done():
-						return
-					case cookieChan <- ce{c: cookie, e: err}:
-					}
-				}
-			}(cookieStore)
-		}
+		close(done)
 	}()
 
-	return func(yield func(*Cookie, error) bool) {
-		startChan <- struct{}{}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case c, ok := <-cookieChan:
-				if !ok {
-					cancel()
-					return
-				}
-				if !yield(c.c, c.e) {
-					cancel()
-					return
-				}
-			}
-		}
-	}
-}
-
-func TraverseCookieStores(ctx context.Context) CookieStoreSeq {
-	ctx, cancel := context.WithCancel(ctx)
-	type se struct {
-		s CookieStore
-		e error
-	}
-	startChan := make(chan struct{}, 1)
-	storeChan := make(chan se, 1)
-
+	// read cookies
 	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-startChan:
-		}
-
-		var wg sync.WaitGroup
-		wg.Add(len(finders))
-		defer func() {
-			wg.Wait()
-			cancel()
-			close(storeChan)
-		}()
-
-		muFinder.RLock()
-		defer muFinder.RUnlock()
-
-		for _, finder := range finders {
-			if finder == nil {
-				wg.Done()
-				continue
-			}
-			go func(finder CookieStoreFinder) {
-				defer wg.Done()
-				for cookieStore, err := range finder.FindCookieStores() {
-					select {
-					case <-ctx.Done():
-						return
-					case storeChan <- se{s: cookieStore, e: err}:
+		var wgcs sync.WaitGroup
+		for cookieStores := range cs {
+			for _, store := range cookieStores {
+				wgcs.Add(1)
+				go func(store CookieStore) {
+					defer wgcs.Done()
+					cookies, err := store.ReadCookies(filters...)
+					if err == nil && cookies != nil {
+						c <- cookies
 					}
-				}
-			}(finder)
+				}(store)
+			}
+
 		}
+		wgcs.Wait()
+		close(c)
 	}()
 
-	return func(yield func(CookieStore, error) bool) {
-		startChan <- struct{}{}
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case s, ok := <-storeChan:
-				if !ok {
-					cancel()
-					return
-				}
-				if !yield(s.s, s.e) {
-					cancel()
-					return
-				}
+	// find cookie store
+	var wgcsf sync.WaitGroup
+	muFinder.RLock()
+	defer muFinder.RUnlock()
+	wgcsf.Add(len(finders))
+	for _, finder := range finders {
+		go func(finder CookieStoreFinder) {
+			defer wgcsf.Done()
+			cookieStores, err := finder.FindCookieStores()
+			if err == nil && cookieStores != nil {
+				cs <- cookieStores
 			}
-		}
+		}(finder)
 	}
+	wgcsf.Wait()
+	close(cs)
+
+	<-done
+
+	return ret
 }

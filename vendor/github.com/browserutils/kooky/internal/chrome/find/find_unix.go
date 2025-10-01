@@ -5,20 +5,14 @@ package find
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/browserutils/kooky/internal/wsl"
 )
 
-func chromeRoots(yield func(string, error) bool) {
+func chromeRoots() ([]string, error) {
 	// "${CHROME_VERSION_EXTRA:-${XDG_CONFIG_HOME:-$HOME/.config}}"
 	// https://chromium.googlesource.com/chromium/src.git/+/62.0.3202.58/docs/user_data_dir.md#linux
 	var dotConfigs, ret []string
 	// fallback
-	if home, err := os.UserHomeDir(); err != nil {
-		if !yield(``, err) {
-			return
-		}
-	} else {
+	if home, err := os.UserHomeDir(); err == nil {
 		dotConfigs = append(dotConfigs, filepath.Join(home, `.config`))
 	}
 	for _, v := range []string{`XDG_CONFIG_HOME`, `CHROME_CONFIG_HOME`} {
@@ -41,50 +35,24 @@ func chromeRoots(yield func(string, error) bool) {
 			)
 		}
 	}
-	for _, r := range ret {
-		if !yield(r, nil) {
-			return
-		}
-	}
-	// on WSL Linux add Windows paths
-	appDataRoot, err := wsl.WSLAppDataRoot()
-	if err != nil && !yield(``, err) {
-		return
-	}
-	for r, err := range windowsChromeRoots(filepath.Join(appDataRoot, `Local`)) {
-		if !yield(r, err) {
-			return
-		}
-	}
+	return ret, nil
 }
 
-func chromiumRoots(yield func(string, error) bool) {
+func chromiumRoots() ([]string, error) {
 	// "${XDG_CONFIG_HOME:-$HOME/.config}"
-	var dotConfigs []string
+	var dotConfigs, ret []string
 	// fallback
-	if home, err := os.UserHomeDir(); err != nil {
-		if !yield(``, err) {
-			return
-		}
-	} else {
+	if home, err := os.UserHomeDir(); err == nil {
 		dotConfigs = append(dotConfigs, filepath.Join(home, `.config`))
 	}
 	if dir, ok := os.LookupEnv(`XDG_CONFIG_HOME`); ok {
 		dotConfigs = append(dotConfigs, dir)
 	}
 	for _, dotConfig := range dotConfigs {
-		if !yield(filepath.Join(dotConfig, `chromium`), nil) {
-			return
-		}
+		ret = append(
+			ret,
+			filepath.Join(dotConfig, `chromium`),
+		)
 	}
-	// on WSL Linux add Windows paths
-	appDataRoot, err := wsl.WSLAppDataRoot()
-	if err != nil && !yield(``, err) {
-		return
-	}
-	for r, err := range windowsChromiumRoots(filepath.Join(appDataRoot, `Local`)) {
-		if !yield(r, err) {
-			return
-		}
-	}
+	return ret, nil
 }
