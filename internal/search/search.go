@@ -12,14 +12,20 @@ import (
 	"strings"
 )
 
+var ErrFzfNotFound = errors.New("fzf not found in PATH")
+var ErrRgNotFound = errors.New("ripgrep (rg) not found in PATH")
+
 type Result struct {
-	File  string
-	Line  int
-	Text  string
-	Raw   string
+	File string
+	Line int
+	Text string
+	Raw  string
 }
 
 func rg(query string, dir string) (*bytes.Buffer, error) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		return nil, ErrRgNotFound
+	}
 	cmd := exec.Command("rg", "--line-number", "--no-heading", "--hidden", "--glob", "!.git", query)
 	cmd.Dir = dir
 	var out bytes.Buffer
@@ -37,6 +43,9 @@ func rg(query string, dir string) (*bytes.Buffer, error) {
 }
 
 func fzf(input *bytes.Buffer) (string, error) {
+	if _, err := exec.LookPath("fzf"); err != nil {
+		return "", ErrFzfNotFound
+	}
 	cmd := exec.Command("fzf", "--ansi", "--no-sort", "--prompt", "rg> ")
 	cmd.Stdin = bytes.NewReader(input.Bytes())
 	var out bytes.Buffer
@@ -95,6 +104,29 @@ func Open(result Result) (string, error) {
 		}
 	}
 	return fmt.Sprintf("%s:%d: %s", abs, result.Line, snippet), nil
+}
+
+// SearchList returns all ripgrep matches parsed into Results (may be large).
+func SearchList(query string, dir string) ([]Result, error) {
+	out, err := rg(query, dir)
+	if err != nil {
+		return nil, err
+	}
+	if out.Len() == 0 {
+		return []Result{}, nil
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	results := make([]Result, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		r, err := parse(line)
+		if err == nil {
+			results = append(results, r)
+		}
+	}
+	return results, nil
 }
 
 func SearchInteractive(query string, dir string) (Result, error) {
