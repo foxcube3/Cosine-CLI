@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"cosine-cli/internal/auth"
 	"cosine-cli/internal/browserlogin"
@@ -15,9 +18,10 @@ func usage() {
 	fmt.Println("Cosine CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  cosine login-chrome       Import cookies from Chrome for cosine.sh")
-	fmt.Println("  cosine whoami             Show stored account info")
-	fmt.Println("  cosine search <query>     Interactive search using ripgrep + fzf")
+	fmt.Println("  cosine login-chrome              Import cookies from Chrome for cosine.sh")
+	fmt.Println("  cosine login-cookie [header]     Save a raw Cookie header (arg or stdin)")
+	fmt.Println("  cosine whoami                    Show stored account info")
+	fmt.Println("  cosine search <query>            Interactive search using ripgrep + fzf")
 }
 
 func cmdDumpChromeCookies() int {
@@ -50,7 +54,7 @@ func cmdLoginChrome() int {
 		fmt.Fprintf(os.Stderr, "failed to read Chrome cookies (subprocess): %s\n", msg)
 		return 1
 	}
-	header := stdout.String()
+	header := strings.TrimSpace(stdout.String())
 	if header == "" {
 		fmt.Fprintf(os.Stderr, "no cookies returned from Chrome\n")
 		return 1
@@ -65,6 +69,48 @@ func cmdLoginChrome() int {
 		return 1
 	}
 	fmt.Println("Imported cookies from Chrome for cosine.sh")
+	return 0
+}
+
+func cmdLoginCookie(args []string) int {
+	var header string
+	if len(args) > 0 {
+		header = strings.TrimSpace(strings.Join(args, " "))
+	} else {
+		// Read from stdin
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			fmt.Fprintln(os.Stderr, "no cookie header provided; pass as argument or pipe via stdin")
+			return 1
+		}
+		b := &strings.Builder{}
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			line, err := reader.ReadString('\n')
+			b.WriteString(line)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "read stdin: %v\n", err)
+				return 1
+			}
+		}
+		header = strings.TrimSpace(b.String())
+	}
+	if header == "" || !strings.Contains(header, "=") {
+		fmt.Fprintln(os.Stderr, "invalid cookie header")
+		return 1
+	}
+	cfg := auth.Config{
+		CookieHeader: header,
+		Source:       "manual",
+	}
+	if err := auth.Save(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to save credentials: %v\n", err)
+		return 1
+	}
+	fmt.Println("Saved cookie header for cosine.sh (manual)")
 	return 0
 }
 
@@ -115,6 +161,8 @@ func main() {
 		os.Exit(cmdLoginChrome())
 	case "dump-chrome-cookies":
 		os.Exit(cmdDumpChromeCookies())
+	case "login-cookie":
+		os.Exit(cmdLoginCookie(os.Args[2:]))
 	case "whoami":
 		os.Exit(cmdWhoAmI())
 	case "search":
