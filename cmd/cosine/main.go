@@ -46,11 +46,8 @@ func cmdLoginChrome() int {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		// Surface child stderr to aid debugging
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
+		// Surface concise child stderr
+		msg := trimChildError(stderr.String(), err)
 		fmt.Fprintf(os.Stderr, "failed to read Chrome cookies (subprocess): %s\n", msg)
 
 		// Interactive fallback: prompt user to paste cookie header
@@ -182,6 +179,36 @@ func cmdSearch(args []string) int {
 	}
 	fmt.Println(line)
 	return 0
+}
+
+func trimChildError(stderr string, runErr error) string {
+	s := strings.TrimSpace(stderr)
+	if s == "" {
+		if runErr != nil {
+			return runErr.Error()
+		}
+		return "unknown error"
+	}
+	// Prefer the 'panic:' line if present
+	sc := bufio.NewScanner(strings.NewReader(s))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if strings.HasPrefix(line, "panic:") {
+			return line
+		}
+	}
+	// Otherwise return first non-empty line
+	sc = bufio.NewScanner(strings.NewReader(s))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line != "" {
+			return line
+		}
+	}
+	if runErr != nil {
+		return runErr.Error()
+	}
+	return "unknown error"
 }
 
 func main() {
