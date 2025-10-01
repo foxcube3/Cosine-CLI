@@ -1,44 +1,52 @@
 package browserlogin
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/browserutils/kooky"
-	"github.com/browserutils/kooky/browser/chrome"
+	_ "github.com/browserutils/kooky/browser/chrome"
 )
 
 // CookieHeaderForCosine gathers non-expired cookies for cosine.sh from Chrome and formats
 // them as a Cookie header string. It searches common Chrome profiles on the system.
 func CookieHeaderForCosine() (string, error) {
-	stores := []kooky.CookieStore{
-		chrome.NewCookieStore(),
-	}
+	// Read cookies from registered Chrome cookie store(s) with filters:
+	// - Valid: non-expired cookies
+	// - DomainHasSuffix: match cosine.sh domains
+	// - Exclude "__Host-CSRF" cookie
+	excludeCSRF := kooky.FilterFunc(func(c *kooky.Cookie) bool {
+		return c != nil && c.Name != "__Host-CSRF"
+	})
+
+	seq := kooky.TraverseCookies(
+		context.Background(),
+		kooky.Valid,
+		kooky.DomainHasSuffix(".cosine.sh"),
+		excludeCSRF,
+	).OnlyCookies()
+
 	var cookies []*kooky.Cookie
-	for _, store := range stores {
-		if store == nil {
-			continue
+	for c := range seq {
+		// c is *kooky.Cookie
+		if c != nil {
+			cookies = append(cookies, c)
 		}
-		defer store.Close()
-		cs, err := kooky.ReadCookies(store, kooky.DomainHasSuffix(".cosine.sh"), kooky.Valid, kooky.NameNotIn("__Host-CSRF"))
-		if err != nil {
-			// try next store; aggregate later if needed
-			continue
-		}
-		cookies = append(cookies, cs...)
 	}
 
 	// Fallback for exact domain match if suffix yielded none
 	if len(cookies) == 0 {
-		for _, store := range stores {
-			if store == nil {
-				continue
-			}
-			cs, err := kooky.ReadCookies(store, kooky.DomainHasSuffix("cosine.sh"), kooky.Valid)
-			if err == nil {
-				cookies = append(cookies, cs...)
+		seq2 := kooky.TraverseCookies(
+			context.Background(),
+			kooky.Valid,
+			kooky.DomainHasSuffix("cosine.sh"),
+		).OnlyCookies()
+		for c := range seq2 {
+			if c != nil {
+				cookies = append(cookies, c)
 			}
 		}
 	}
