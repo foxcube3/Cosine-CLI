@@ -1,7 +1,7 @@
 module cosine-cli
 
-go 1.21
+go 1.24.7
 
 require (
-	github.com/zellyn/kooky v0.2.4
+	github.com/browserutils/kooky v0.2.4
 )
