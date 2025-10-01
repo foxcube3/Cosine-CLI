@@ -52,14 +52,38 @@ func cmdLoginChrome() int {
 			msg = err.Error()
 		}
 		fmt.Fprintf(os.Stderr, "failed to read Chrome cookies (subprocess): %s\n", msg)
-		// Friendly fallback instructions for manual cookie import
-		fmt.Fprintln(os.Stderr, "\nWorkaround: import cookies manually with:")
-		fmt.Fprintln(os.Stderr, "  1) In Chrome, open https://cosine.sh and log in.")
+
+		// Interactive fallback: prompt user to paste cookie header
+		fmt.Fprintln(os.Stderr, "\nInteractive fallback:")
+		fmt.Fprintln(os.Stderr, "  1) In Chrome, open https://cosine.sh and ensure you are logged in.")
 		fmt.Fprintln(os.Stderr, "  2) Open DevTools (F12) -> Network tab.")
-		fmt.Fprintln(os.Stderr, "  3) Reload the page, click a request to cosine.sh,")
-		fmt.Fprintln(os.Stderr, "     expand 'Request Headers' and copy the full 'Cookie' header.")
-		fmt.Fprintln(os.Stderr, "  4) Run: cosine login-cookie \"<paste cookie header here>\"")
-		return 1
+		fmt.Fprintln(os.Stderr, "  3) Reload the page, click a request to cosine.sh, then in Headers")
+		fmt.Fprintln(os.Stderr, "     copy the full value of the 'Cookie' request header.")
+		fmt.Fprintln(os.Stderr, "Paste the Cookie header below (single line). Press Enter on an empty line to cancel.")
+		fmt.Fprint(os.Stderr, "> ")
+
+		reader := bufio.NewReader(os.Stdin)
+		line, _ := reader.ReadString('\n')
+		header := strings.TrimSpace(line)
+		if header == "" {
+			fmt.Fprintln(os.Stderr, "cancelled")
+			return 1
+		}
+		if !strings.Contains(header, "=") {
+			fmt.Fprintln(os.Stderr, "invalid cookie header")
+			return 1
+		}
+
+		cfg := auth.Config{
+			CookieHeader: header,
+			Source:       "manual",
+		}
+		if err := auth.Save(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to save credentials: %v\n", err)
+			return 1
+		}
+		fmt.Println("Saved cookie header for cosine.sh (manual)")
+		return 0
 	}
 	header := strings.TrimSpace(stdout.String())
 	if header == "" {
