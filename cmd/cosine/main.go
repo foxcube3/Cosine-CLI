@@ -12,6 +12,7 @@ import (
 	"cosine-cli/internal/auth"
 	"cosine-cli/internal/browserlogin"
 	"cosine-cli/internal/search"
+	"cosine-cli/internal/cosineapi"
 )
 
 func usage() {
@@ -24,6 +25,7 @@ func usage() {
 	fmt.Println("  cosine whoami                    Show stored account info")
 	fmt.Println("  cosine search <query>            Interactive search using ripgrep + fzf")
 	fmt.Println("  cosine list-search <query>       Print matches without fzf")
+	fmt.Println("  cosine ask <question>            Ask a question to cosine.sh and print the reply")
 }
 
 func cmdDumpChromeCookies() int {
@@ -216,6 +218,22 @@ func cmdListSearch(args []string) int {
 	return 0
 }
 
+func cmdAsk(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "missing question")
+		return 1
+	}
+	question := strings.Join(args, " ")
+	reply, err := cosineapi.Ask(strings.TrimSpace(question))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ask: %v\n", err)
+		return 1
+	}
+	// Print raw reply body
+	fmt.Println(strings.TrimSpace(reply))
+	return 0
+}
+
 func trimChildError(stderr string, runErr error) string {
 	s := strings.TrimSpace(stderr)
 	if s == "" {
@@ -335,6 +353,8 @@ func main() {
 		os.Exit(cmdSearch(os.Args[2:]))
 	case "list-search":
 		os.Exit(cmdListSearch(os.Args[2:]))
+	case "ask":
+		os.Exit(cmdAsk(os.Args[2:]))
 	case "help", "-h", "--help":
 		usage()
 	default:
