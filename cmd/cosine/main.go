@@ -47,16 +47,25 @@ func cmdLoginChrome() int {
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		// Surface child stderr to aid debugging
-		msg := stderr.String()
+		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = err.Error()
 		}
 		fmt.Fprintf(os.Stderr, "failed to read Chrome cookies (subprocess): %s\n", msg)
+		// Friendly fallback instructions for manual cookie import
+		fmt.Fprintln(os.Stderr, "\nWorkaround: import cookies manually with:")
+		fmt.Fprintln(os.Stderr, "  1) In Chrome, open https://cosine.sh and log in.")
+		fmt.Fprintln(os.Stderr, "  2) Open DevTools (F12) -> Network tab.")
+		fmt.Fprintln(os.Stderr, "  3) Reload the page, click a request to cosine.sh,")
+		fmt.Fprintln(os.Stderr, "     expand 'Request Headers' and copy the full 'Cookie' header.")
+		fmt.Fprintln(os.Stderr, "  4) Run: cosine login-cookie \"<paste cookie header here>\"")
 		return 1
 	}
 	header := strings.TrimSpace(stdout.String())
 	if header == "" {
 		fmt.Fprintf(os.Stderr, "no cookies returned from Chrome\n")
+		fmt.Fprintln(os.Stderr, "\nWorkaround: use manual import. See:")
+		fmt.Fprintln(os.Stderr, "  cosine login-cookie \"<Cookie header>\"")
 		return 1
 	}
 
