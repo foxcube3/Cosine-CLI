@@ -26,6 +26,7 @@ func usage() {
 	fmt.Println("  cosine search <query>            Interactive search using ripgrep + fzf")
 	fmt.Println("  cosine list-search <query>       Print matches without fzf")
 	fmt.Println("  cosine ask <question>            Ask a question to cosine.sh and print the reply")
+	fmt.Println("  cosine probe-api [baseURL]       Probe common API endpoints and log results")
 }
 
 func cmdDumpChromeCookies() int {
@@ -234,6 +235,32 @@ func cmdAsk(args []string) int {
 	return 0
 }
 
+func cmdProbeAPI(args []string) int {
+	base := ""
+	if len(args) >= 1 {
+		base = strings.TrimSpace(args[0])
+	}
+	results, err := cosineapi.ProbeDefault(base)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "probe-api: %v\n", err)
+		return 1
+	}
+	logPath, err := cosineapi.LogProbe(results)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "probe-api: failed to write log: %v\n", err)
+		return 1
+	}
+	// Print a brief summary to stdout
+	found := 0
+	for _, r := range results {
+		if r.Status != 0 {
+			found++
+		}
+	}
+	fmt.Printf("Probed %d endpoints; logged to %s\n", len(results), logPath)
+	return 0
+}
+
 func trimChildError(stderr string, runErr error) string {
 	s := strings.TrimSpace(stderr)
 	if s == "" {
@@ -355,6 +382,8 @@ func main() {
 		os.Exit(cmdListSearch(os.Args[2:]))
 	case "ask":
 		os.Exit(cmdAsk(os.Args[2:]))
+	case "probe-api":
+		os.Exit(cmdProbeAPI(os.Args[2:]))
 	case "help", "-h", "--help":
 		usage()
 	default:
