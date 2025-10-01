@@ -14,7 +14,6 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  cosine login-chrome       Import cookies from Chrome for cosine.sh")
-	fmt.Println("  cosine login-firefox      Import cookies from Firefox for cosine.sh")
 	fmt.Println("  cosine whoami             Show stored account info")
 	fmt.Println("  cosine search <query>     Interactive search using ripgrep + fzf")
 }
@@ -34,24 +33,6 @@ func cmdLoginChrome() int {
 		return 1
 	}
 	fmt.Println("Imported cookies from Chrome for cosine.sh")
-	return 0
-}
-
-func cmdLoginFirefox() int {
-	header, err := browserlogin.CookieHeaderForCosineFirefox()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to read Firefox cookies: %v\n", err)
-		return 1
-	}
-	cfg := auth.Config{
-		CookieHeader: header,
-		Source:       "firefox",
-	}
-	if err := auth.Save(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to save credentials: %v\n", err)
-		return 1
-	}
-	fmt.Println("Imported cookies from Firefox for cosine.sh")
 	return 0
 }
 
@@ -100,8 +81,6 @@ func main() {
 	switch os.Args[1] {
 	case "login-chrome":
 		os.Exit(cmdLoginChrome())
-	case "login-firefox":
-		os.Exit(cmdLoginFirefox())
 	case "whoami":
 		os.Exit(cmdWhoAmI())
 	case "search":
@@ -113,5 +92,4 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
-}
 }
