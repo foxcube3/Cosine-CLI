@@ -15,9 +15,9 @@ require (
 	github.com/gonuts/binary v0.2.0 // indirect
 	github.com/keybase/go-keychain v0.0.1 // indirect
 	github.com/zalando/go-keyring v0.2.6 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
-	golang.org/x/net v0.42.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	www.velocidex.com/golang/go-ese v0.2.0 // indirect
 )
